@@ -42,7 +42,7 @@ curl -sf http://localhost:8500/health
 | Name | Default | Description |
 |---|---|---|
 | `QUANT_OPENBB_GATEWAY_BASE_URL` | `http://quant-api-gateway:8000/api/v2` | Gateway v2 base URL. Use `localhost` for host-network testing. |
-| `QUANT_OPENBB_INTERNAL_API_KEY` | _(empty)_ | Shared `X-API-Key` for internal calls (must match the gateway's `INTERNAL_API_KEY`). |
+| `QUANT_OPENBB_INTERNAL_API_KEY` | _(empty)_ | Shared `X-API-Key` for outbound gateway calls. Also controls **inbound auth** on `/api/v2/*` when non-empty (see [Authentication](#authentication)). |
 | `QUANT_OPENBB_LOG_LEVEL` | `INFO` | Python logging level. |
 | `QUANT_OPENBB_CORS_ALLOW_ORIGINS` | `["*"]` | CORS allow-list (JSON list). |
 
@@ -82,6 +82,24 @@ quant-infra-db  →  quant-api-gateway  →  quant-openbb
 ```
 
 Without `quant-api-gateway` healthy, the proxy returns 502/504 errors.
+
+## Authentication
+
+`QUANT_OPENBB_INTERNAL_API_KEY` controls optional inbound auth on the proxy
+router. The check uses constant-time comparison (`secrets.compare_digest`)
+and failures return HTTP 401.
+
+| Key state | Behavior |
+| --- | --- |
+| **Empty** (default) | All requests allowed — backward compatible |
+| **Non-empty** | `X-API-Key` header required on every `/api/v2/*` request |
+
+`/health` is always open (it runs on the app, not the router).
+
+For the OpenBB Workspace "Connect backend" form, configure Key = `X-API-Key`,
+Value = your key, Location = `Header`.
+
+See [`src/openbb_quant/auth.py`](src/openbb_quant/auth.py) for the implementation.
 
 ## OpenBB data provider connections
 

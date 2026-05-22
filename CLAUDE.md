@@ -26,6 +26,7 @@ dashboard onto this service.
 ```
 src/openbb_quant/      # the importable package
   __init__.py
+  auth.py              # verify_api_key — optional inbound X-API-Key dependency
   config.py            # QuantOpenBBSettings, QUANT_OPENBB_* env vars
   client.py            # GatewayClient — async httpx + X-API-Key + 5xx retry
   router.py            # APIRouter — 16 proxy endpoints under /api/v2
@@ -33,6 +34,7 @@ src/openbb_quant/      # the importable package
   models.py            # Documentation-level Pydantic models
   main.py              # Standalone FastAPI app for `uvicorn …main:app`
 tests/                 # pytest suite (target ≥80% coverage)
+  test_auth.py         # inbound auth tests (5 cases)
 examples/              # populated in Phase 3+
 Dockerfile             # multi-stage; runs openbb-build as hard requirement
 docker-compose.yml     # quant-network external, host :8500 → :8000
@@ -75,7 +77,7 @@ The most important ones:
 | Variable | Purpose |
 |---|---|
 | `QUANT_OPENBB_GATEWAY_BASE_URL` | Where the proxy points (default: docker service name) |
-| `QUANT_OPENBB_INTERNAL_API_KEY` | Must match the gateway's `INTERNAL_API_KEY` |
+| `QUANT_OPENBB_INTERNAL_API_KEY` | Must match the gateway's `INTERNAL_API_KEY`. Also controls **inbound** auth on `/api/v2/*` (see [Inbound auth](#inbound-auth)). |
 | `QUANT_OPENBB_LOG_LEVEL` | Python logging level |
 | `QUANT_OPENBB_CORS_ALLOW_ORIGINS` | JSON list; restrict in production |
 

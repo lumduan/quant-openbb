@@ -48,9 +48,9 @@ At `pro.openbb.co` → **Data Connectors** → **Add Data**:
 | **Name** | `quant-trading-system` | Any descriptive name you want |
 | **Endpoint URL** | `http://127.0.0.1:8500` | The API root. Use `localhost` if `127.0.0.1` doesn't work. |
 | **Validate widgets** | `No` | The endpoints don't have OpenBB widget annotations |
-| **Key** | _(leave empty)_ | quant-openbb has no inbound auth requirement |
-| **Value** | _(leave empty)_ | |
-| **Location** | `Header` | _(ignored when empty)_ |
+| **Key** | `X-API-Key` | Same header name used for gateway outbound calls |
+| **Value** | your `QUANT_OPENBB_INTERNAL_API_KEY` value | From your `.env` |
+| **Location** | `Header` | |
 
 - Click **Test** to verify the connection reaches `/health`
 - If the test passes, click **Add**
@@ -109,23 +109,27 @@ Same fields as section 1.2, but the Endpoint URL should match whatever port
 
 ---
 
-## 3. Adding authentication
+## 3. Authentication
 
-If you add inbound authentication to quant-openbb (e.g., requiring an API key
-on incoming requests), configure the Key/Value/Location fields:
+`quant-openbb` now supports optional inbound API-key authentication. It reuses
+the same `QUANT_OPENBB_INTERNAL_API_KEY` from your `.env`.
+
+**When the key is set (non-empty):**
+- Every `/api/v2/*` request must carry an `X-API-Key` header matching the key.
+- Failures return HTTP 401 with a JSON body.
+
+**When the key is empty (default):**
+- All requests are allowed — backward compatible.
+
+`/health` is always open (it runs on the app, not the router).
+
+In the Workspace "Connect backend" form, fill in the auth section:
 
 | Field | Value |
 | --- | --- |
 | **Key** | `X-API-Key` |
-| **Value** | your shared internal API key |
+| **Value** | your `QUANT_OPENBB_INTERNAL_API_KEY` value |
 | **Location** | `Header` |
-
-The Workspace will include this header on every request to your backend.
-
-> **Note:** In the current standalone setup, `quant-openbb` does **not**
-> require authentication on incoming requests. The `X-API-Key` in your `.env`
-> is only used for outbound calls to the gateway, not inbound calls from
-> clients.
 
 ---
 

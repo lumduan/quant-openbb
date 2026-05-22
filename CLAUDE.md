@@ -81,6 +81,20 @@ The most important ones:
 
 Never commit `.env`. Only `.env.example` is tracked.
 
+## Inbound auth
+
+When `QUANT_OPENBB_INTERNAL_API_KEY` is **non-empty**, every request to
+`/api/v2/*` must carry an `X-API-Key` header matching this value. The
+check uses `secrets.compare_digest` for constant-time comparison, and
+failures return HTTP 401 with a JSON body.
+
+- **Empty key** (default): no auth — backward compatible.
+- **Non-empty key**: all proxy endpoints require the header. `/health` is
+  always open (it is on the app, not on the router).
+- The dependency lives in `auth.py` and is applied via
+  `app.include_router(router, dependencies=[Depends(verify_api_key)])` in
+  `main.py`.
+
 ## Known gotchas
 
 - **`openbb-build` in the Docker runtime stage** — required for the

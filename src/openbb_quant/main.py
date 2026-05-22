@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from openbb_quant.auth import verify_api_key
 from openbb_quant.config import get_settings
 from openbb_quant.router import router
 
@@ -32,7 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router)
+app.include_router(router, dependencies=[Depends(verify_api_key)])
 
 
 @app.get("/health", tags=["meta"])

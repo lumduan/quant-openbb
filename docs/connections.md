@@ -1,177 +1,245 @@
-# Connecting quant-openbb to OpenBB data providers
+# Connecting quant-openbb to the OpenBB Workspace
 
-`quant-openbb` runs in one of two modes:
+The OpenBB Workspace at [pro.openbb.co](https://pro.openbb.co) can connect to
+locally running API backends via its **Data Connectors** feature. This is the
+"Connect backend" form you see in the dashboard — it registers your
+`quant-openbb` service so the Workspace can call its endpoints and render
+widgets.
 
-| Mode | Entry point | What loads |
-| --- | --- | --- |
-| **Standalone** (default) | `uvicorn openbb_quant.main:app` | Only the quant proxy router |
-| **Full Platform** | `uvicorn openbb_core.api.rest_api:app` | Quant extension + all installed OpenBB providers |
+## Architecture
 
-Standalone mode only proxies the quant-api-gateway. To use OpenBB data providers
-(polygon, yfinance, alpha_vantage, etc.) alongside the quant extension, run in
-full-platform mode and configure provider credentials.
+```
+quant-openbb (FastAPI, port 8500)
+       |
+       |  Workspace calls your endpoints
+       |  e.g. GET /api/v2/engines/catalog
+       |
+       v
+OpenBB Workspace (pro.openbb.co)
+  → Data Connectors → Connect backend
+  → form fields: Name, Endpoint URL, Auth, Validate widgets
+```
+
+The Workspace runs in your browser. It reaches your local API via the address
+you enter — typically `http://127.0.0.1:<port>`.
 
 ---
 
-## 1. Full-platform mode (local)
+## 1. Quick connect (standalone mode)
 
-### 1.1 Install the full OpenBB package
+This is the simplest approach. Your `quant-openbb` is already running as a
+standalone FastAPI app on port 8500.
 
-The default `pyproject.toml` depends on `openbb-core` only (the extension
-framework). To add data providers, install the full `openbb` meta-package plus
-any provider extensions you need:
+### 1.1 Start quant-openbb
+
+```bash
+uv sync
+cp .env.example .env       # fill in QUANT_OPENBB_INTERNAL_API_KEY
+uv run uvicorn openbb_quant.main:app --reload --port 8500
+curl -sf http://localhost:8500/health
+```
+
+### 1.2 Fill in the Connect backend form
+
+At `pro.openbb.co` → **Data Connectors** → **Add Data**:
+
+| Field | Value | Notes |
+| --- | --- | --- |
+| **Name** | `quant-trading-system` | Any descriptive name you want |
+| **Endpoint URL** | `http://127.0.0.1:8500` | The API root. Use `localhost` if `127.0.0.1` doesn't work. |
+| **Validate widgets** | `No` | The endpoints don't have OpenBB widget annotations |
+| **Key** | _(leave empty)_ | quant-openbb has no inbound auth requirement |
+| **Value** | _(leave empty)_ | |
+| **Location** | `Header` | _(ignored when empty)_ |
+
+- Click **Test** to verify the connection reaches `/health`
+- If the test passes, click **Add**
+
+### 1.3 Verify in the Workspace
+
+Once connected, try searching for one of the proxied endpoints in the Workspace
+search bar:
+
+```
+/api/v2/engines/catalog
+/api/v2/engines/portfolio/overall-performance
+/api/v2/engines/portfolio/strategies
+```
+
+The raw JSON response will be displayed. To get rich table/metric/chart widgets
+instead, see section 4 below.
+
+---
+
+## 2. Connect via openbb-api (with widget support)
+
+The `openbb-api` command is an alternative to `uvicorn` that wraps your FastAPI
+app with OpenBB Platform metadata, making endpoints discoverable as rich
+widgets in the Workspace. It comes from the `openbb-platform-api` package.
+
+### 2.1 Install openbb-platform-api
+
+```bash
+uv add openbb-platform-api
+```
+
+Or install the full OpenBB platform:
 
 ```bash
 uv add openbb
-uv add openbb-yfinance        # example: Yahoo Finance provider
-uv add openbb-polygon          # example: Polygon.io provider
 ```
 
-After adding providers, rebuild static assets so the extension and providers are
-discovered:
+### 2.2 Launch with openbb-api
 
 ```bash
-uv run openbb-build
+uv run openbb-api --app src/openbb_quant/main.py --reload
 ```
 
-### 1.2 Configure provider credentials
-
-OpenBB looks for credentials in three places (checked in order):
-
-1. **`~/.openbb_platform/.env`** — user-level, persisted across projects
-2. **Environment variables** — `OPENBB_<PROVIDER>_API_KEY` etc.
-3. **OpenBB Hub** — cloud-synced credentials at [my.openbb.co](https://my.openbb.co/app/platform)
-
-**Option A — local `.env` file (recommended for dev)**
-
-Create `~/.openbb_platform/.env`:
+This starts the server on `http://127.0.0.1:6900` by default. To use a
+different port:
 
 ```bash
-mkdir -p ~/.openbb_platform
-cat > ~/.openbb_platform/.env << 'EOF'
-# Data provider API keys
-POLYGON_API_KEY=your_polygon_key_here
-
-# OpenBB Hub credentials (optional, for synced preferences)
-OPENBB_HUB_BACKEND=https://my.openbb.co
-OPENBB_HUB_PAT=your_personal_access_token_here
-EOF
+uv run openbb-api --app src/openbb_quant/main.py --port 8500 --reload
 ```
 
-**Option B — environment variables**
+### 2.3 Fill in the Connect backend form
 
-Export directly in your shell or in the service's `.env`:
-
-```bash
-export POLYGON_API_KEY=your_polygon_key_here
-```
-
-**Option C — OpenBB Hub (cloud credentials)**
-
-1. Create an account at [my.openbb.co](https://my.openbb.co/app/platform)
-2. Generate a Personal Access Token (PAT) in Settings
-3. Set the PAT:
-
-```bash
-mkdir -p ~/.openbb_platform
-echo 'OPENBB_HUB_PAT=your_pat_here' >> ~/.openbb_platform/.env
-```
-
-4. Log in via the CLI:
-
-```bash
-uv run openbb login
-```
-
-Provider API keys can then be entered through the Hub web UI and are synced
-to your local machine automatically.
-
-### 1.3 Start the full platform
-
-```bash
-uv run uvicorn openbb_core.api.rest_api:app --reload --port 8500
-```
-
-This starts the full OpenBB Platform with:
-- **`/api/v2/engines/*`** — the quant proxy endpoints
-- **`/api/v1/provider/*`** — OpenBB data provider endpoints (if providers installed)
-
-Health check:
-
-```bash
-curl -sf http://localhost:8500/health                    # quant extension
-curl -sf http://localhost:8500/api/v2/engines/catalog    # engine catalog
-```
-
-### 1.4 Verify a provider works
-
-If you installed `openbb-yfinance`:
-
-```bash
-curl http://localhost:8500/api/v1/provider/yfinance/equity/price/historical \
-  -G -d 'symbol=AAPL' -d 'start_date=2026-01-01'
-```
+Same fields as section 1.2, but the Endpoint URL should match whatever port
+`openbb-api` is using (default `http://127.0.0.1:6900`).
 
 ---
 
-## 2. Full-platform mode (Docker)
+## 3. Adding authentication
 
-### 2.1 Extend the Dockerfile for providers
+If you add inbound authentication to quant-openbb (e.g., requiring an API key
+on incoming requests), configure the Key/Value/Location fields:
 
-The default `Dockerfile` installs `openbb-core` only and runs `openbb-build`
-(which will fail if the full `openbb` package is absent). To add providers,
-extend the build:
+| Field | Value |
+| --- | --- |
+| **Key** | `X-API-Key` |
+| **Value** | your shared internal API key |
+| **Location** | `Header` |
 
-```dockerfile
-# Append to the builder stage (after the existing COPY + RUN)
-# Install the full openbb package and provider extensions
-RUN uv pip install openbb openbb-yfinance openbb-polygon --prefix /opt/venv
-RUN openbb-build
+The Workspace will include this header on every request to your backend.
+
+> **Note:** In the current standalone setup, `quant-openbb` does **not**
+> require authentication on incoming requests. The `X-API-Key` in your `.env`
+> is only used for outbound calls to the gateway, not inbound calls from
+> clients.
+
+---
+
+## 4. Enhancing endpoints for rich widgets
+
+By default, the quant proxy endpoints return raw JSON (typed `Any`), which the
+Workspace displays as plain text. To get rich **table**, **metric**, and
+**chart** widgets, return properly typed responses from annotated endpoints.
+
+### 4.1 Table widget example
+
+```python
+from typing import Annotated
+from fastapi import FastAPI, Query
+from openbb_core.provider.abstract.data import Data
+from pydantic import Field
+
+class StrategySummary(Data):
+    """Active strategy in the portfolio."""
+    id: str = Field(title="Strategy ID", description="Gateway-registered strategy slug")
+    name: str = Field(title="Name")
+    type: str = Field(title="Type")
+    capital_weight: float = Field(
+        title="Capital Weight",
+        json_schema_extra={"x-unit_measurement": "percent", "x-frontend_multiply": 100},
+    )
+    active: bool = Field(title="Active")
+
+@app.get("/api/v2/engines/portfolio/strategies")
+async def list_strategies() -> list[StrategySummary]:
+    """Registered portfolio strategies."""
+    raw = await _client.get("engines/portfolio/strategies")
+    return [StrategySummary.model_validate(r) for r in raw]
 ```
 
-Or, add the providers to `pyproject.toml` as dependencies so `uv sync` picks
-them up automatically:
+### 4.2 Metric widget example
+
+```python
+@app.get("/api/v2/engines/portfolio/overall-performance")
+async def overall_perf() -> str:
+    """Aggregate portfolio performance KPI."""
+    raw = await _client.get("engines/portfolio/overall-performance")
+    md = f"""# Portfolio Overview
+| Metric | Value |
+|---|---|
+| Total Value | ${raw['total_portfolio_value']:,.2f} |
+| Daily Return | {raw['weighted_daily_return']:.4%} |
+| Max Drawdown | {raw['combined_max_drawdown']:.4%} |
+| Active Strategies | {raw['active_strategies']} |
+"""
+    return md
+```
+
+### 4.3 Available widget types
+
+| Return type | Widget rendered |
+| --- | --- |
+| `str` | Markdown card |
+| `list[dict]` | Table |
+| `list[BaseModel]` | Rich table (column titles, units, formatting) |
+| `dict` (Plotly JSON) | Chart |
+| `OBBject` | OpenBB-standard response |
+
+### 4.4 OpenBB annotations that drive the UI
+
+| Mechanism | Effect in Workspace |
+| --- | --- |
+| `Field(title="...")` | Column header |
+| `Field(description="...")` | Column hover tooltip |
+| `Query(description="...")` | Parameter hover tooltip |
+| `Literal["A","B"]` | Dropdown parameter |
+| `json_schema_extra={"x-unit_measurement": "percent"}` | Percent formatting |
+| `json_schema_extra={"x-frontend_multiply": 100}` | Auto-multiply decimals → percents |
+| Docstring on endpoint | Widget description in search results |
+
+---
+
+## 5. Docker + Workspace connectivity
+
+When running in Docker, the Workspace (running in your browser) needs to reach
+the container's host port.
+
+### 5.1 Default compose (already works)
+
+The `docker-compose.yml` already maps host `:8500` → container `:8000`:
+
+```yaml
+ports:
+  - "8500:8000"
+```
+
+In the Connect backend form, use `http://127.0.0.1:8500` as the Endpoint URL.
+The browser connects to the host port, which forwards to the container.
+
+### 5.2 Full-platform mode in Docker
+
+To also have OpenBB data providers available through the same container, switch
+the entry point and add provider packages:
 
 ```bash
+# In pyproject.toml, add:
 uv add openbb openbb-yfinance
 ```
 
-Then rebuild the image:
-
-```bash
-docker compose build --no-cache
+```dockerfile
+# In Dockerfile, after the builder stage:
+RUN uv pip install openbb openbb-yfinance --prefix /opt/venv
 ```
 
-### 2.2 Mount credentials into the container
-
-The OpenBB Platform reads `~/.openbb_platform/.env` at startup. Mount it as a
-volume in `docker-compose.yml`:
+Override the CMD in `docker-compose.yml`:
 
 ```yaml
 services:
   quant-openbb:
-    # ... existing config ...
-    volumes:
-      - ${HOME}/.openbb_platform:/home/appuser/.openbb_platform:ro
-```
-
-Create the credentials file on the host first:
-
-```bash
-mkdir -p ~/.openbb_platform
-cat > ~/.openbb_platform/.env << 'EOF'
-POLYGON_API_KEY=your_key_here
-EOF
-```
-
-### 2.3 Switch the CMD to the full platform
-
-Override the command in `docker-compose.yml`:
-
-```yaml
-services:
-  quant-openbb:
-    # ... existing config ...
     command:
       - uvicorn
       - openbb_core.api.rest_api:app
@@ -181,50 +249,62 @@ services:
       - "8000"
 ```
 
+Then in the Connect backend form, Endpoint URL is still `http://127.0.0.1:8500`.
+
 ---
 
-## 3. Running both modes simultaneously
+## 6. Running both modes simultaneously
 
-You can run the standalone proxy on `:8500` and the full platform on another
-port:
+Standalone proxy on `:8500`, full platform on another port:
 
 ```bash
-# Terminal 1 — standalone proxy (quant only)
+# Terminal 1 — standalone proxy
 uv run uvicorn openbb_quant.main:app --port 8500
 
 # Terminal 2 — full platform (quant + providers)
 uv run uvicorn openbb_core.api.rest_api:app --port 8501
 ```
 
-Both share the same `QUANT_OPENBB_GATEWAY_BASE_URL` and `QUANT_OPENBB_INTERNAL_API_KEY`
-settings.
+Register both as separate backends in the Workspace if needed.
 
 ---
 
-## 4. Troubleshooting
+## 7. Troubleshooting
 
-**`openbb-build` fails with `ModuleNotFoundError: No module named 'openbb'`**
+### Test fails ("unable to connect")
 
-The full `openbb` package is not installed. Either install it (`uv add openbb`)
-or, if you only need standalone mode, remove the `RUN openbb-build` line from
-the Dockerfile.
+- Verify the server is running: `curl -sf http://127.0.0.1:8500/health`
+- In Docker, ensure the port mapping is correct: `docker compose ps`
+- Safari/Brave block HTTP connections to localhost. Use Chrome, or set up
+  HTTPS via [OpenBB's self-signed certificate guide](https://docs.openbb.co/odp/desktop/backends#self-signed-certificate).
 
-**Extension not discovered in full-platform mode**
+### Endpoints return 502/504
 
-Run `openbb-build` after adding or removing provider packages. This rebuilds
-the static asset registry so the platform knows about all extensions.
+The upstream gateway is down. Bring-up order: `quant-infra-db` →
+`quant-api-gateway` → `quant-openbb`.
 
-**401/403 from provider endpoints**
+### Widgets show as raw JSON instead of tables/charts
 
-Provider credentials are missing or invalid. Verify:
+Endpoints return untyped JSON (`Any`). To get rich widgets, wrap responses in
+typed Pydantic models (see section 4) or return Markdown strings.
+
+### openbb-api not found
+
+Install the package: `uv add openbb-platform-api`
+
+### ngrok for remote access
+
+To access your local quant-openbb from anywhere (e.g., mobile):
 
 ```bash
-ls -la ~/.openbb_platform/.env
-grep -E 'API_KEY|HUB_PAT' ~/.openbb_platform/.env
+ngrok http 8500
 ```
 
-**Container can't read `~/.openbb_platform/`**
+In the Connect backend form, replace the Endpoint URL with the ngrok
+forwarding URL (e.g., `https://abc123.ngrok.io`). Add an auth header:
 
-Ensure the volume path exists on the host and the container user has read
-permissions. The runtime image runs as `root` by default; if you add a
-non-root user, adjust ownership accordingly.
+| Field | Value |
+| --- | --- |
+| **Key** | `ngrok-skip-browser-warning` |
+| **Value** | `x` |
+| **Location** | `Header` |

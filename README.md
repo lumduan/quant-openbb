@@ -84,3 +84,50 @@ Without `quant-api-gateway` healthy, the proxy returns 502/504 errors.
 
 See [`CLAUDE.md`](CLAUDE.md) for the full development workflow, quality
 gate, and known gotchas.
+
+## Migration from quant-dashboard
+
+> **quant-dashboard** ([github.com/lumduan/quant-dashboard](https://github.com/lumduan/quant-dashboard))
+> is deprecated as of 2026-05-22 and superseded by this service.
+
+### Feature-to-command mapping
+
+Every dashboard data hook has a typed OpenBB command equivalent (confirmed
+in Phase 3 of the OpenBB transition). Use this table to migrate your
+existing dashboard integration:
+
+| Dashboard Feature | Dashboard Hook | OpenBB Typed Command | Raw Proxy Path |
+|---|---|---|---|
+| Portfolio Performance | `fetchOverallPerformance` | `overall_performance()` | `GET /engines/portfolio/overall-performance` |
+| Portfolio Equity Curve | `fetchPortfolioEquityCurve` | `portfolio_equity_curve(normalize)` | `GET /engines/portfolio/equity-curve` |
+| Strategy List | `fetchStrategies` | `list_strategies()` | `GET /engines/portfolio/strategies` |
+| Portfolio Snapshot | `fetchPortfolioSnapshot` | `portfolio_snapshot(snapshot_date?)` | `GET /engines/portfolio/snapshot[/{date}]` |
+| Strategy Details | `fetchStrategyDetails` | (N/A — use `strategy_report`) | `GET /engines/portfolio/strategies/{id}` |
+| Strategy Equity Curve | `fetchStrategyEquityCurve` | `equity_curve(strategy_id)` | `GET /engines/portfolio/strategies/{id}/equity-curve` |
+| Strategy Report | `fetchStrategyReport` | `strategy_report(strategy_id, target_date?)` | `GET /engines/backtest/strategies/{id}/report` |
+| Trade Log | `fetchStrategyTrades` | `trade_log(strategy_id, ...)` | `GET /engines/backtest/strategies/{id}/trades` |
+| Benchmark Curve | `fetchStrategyBenchmarkCurve` | *(raw proxy, no typed command)* | `GET /engines/backtest/strategies/{id}/benchmark-curve` |
+
+### Quick start
+
+```python
+from openbb_quant.commands import (
+    overall_performance,
+    portfolio_equity_curve,
+    list_strategies,
+    strategy_report,
+    trade_log,
+)
+import asyncio
+
+async def main():
+    perf = await overall_performance()
+    strategies = await list_strategies()
+    # Full examples: see examples/ directory
+
+asyncio.run(main())
+```
+
+> **Bring-up reminder:** Ensure the stack is running before calling commands:
+> `quant-infra-db` → `quant-api-gateway` → `quant-openbb`
+> (see [CLAUDE.md](../CLAUDE.md) for the full bring-up order).

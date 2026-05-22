@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -86,3 +87,36 @@ class EngineEntry(BaseModel):
     type: str
     status: str
     description: str
+
+
+class StrategyReportResponse(BaseModel):
+    """Wrapper around the gateway strategy-report payload.
+
+    The ``report`` field carries the strategy-specific KPIs, profit
+    structure, and returns table as raw JSON — kept as ``dict[str, Any]``
+    so downstream consumers can navigate strategy-specific shapes without
+    breaking when extra keys are added gateway-side.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    strategy_id: str
+    as_of_date: date
+    report: dict[str, Any]
+
+
+class TradeLogResponse(BaseModel):
+    """Paginated trades for a single strategy.
+
+    Individual trade rows vary in shape across strategy types (CSM-SET vs.
+    TFEX vs. future engines), so ``items`` is intentionally typed as
+    ``list[dict[str, Any]]`` rather than a concrete row model. Pagination
+    metadata is the same across strategies.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    items: list[dict[str, Any]]
+    total: int
+    limit: int
+    offset: int

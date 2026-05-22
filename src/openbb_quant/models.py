@@ -101,7 +101,7 @@ class StrategyReportResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     strategy_id: str
-    as_of_date: date
+    as_of: str
     report: dict[str, Any]
 
 

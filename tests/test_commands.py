@@ -104,7 +104,7 @@ async def test_overall_performance(commands_mock_client: AsyncMock) -> None:
 async def test_strategy_report_default(commands_mock_client: AsyncMock) -> None:
     commands_mock_client.get.return_value = {
         "strategy_id": "csm-set",
-        "as_of_date": "2026-05-22",
+        "as_of": "2026-05-22",
         "report": {
             "headline": {"net_profit": "1234.56", "sharpe": "1.42"},
             "profit_structure": [],
@@ -249,11 +249,11 @@ async def test_strategy_report_with_target_date(commands_mock_client: AsyncMock)
 
     commands_mock_client.get.return_value = {
         "strategy_id": "csm-set",
-        "as_of_date": "2026-04-30",
+        "as_of": "2026-04-30",
         "report": {"headline": {}},
     }
     result = await commands.strategy_report("csm-set", target_date=date(2026, 4, 30))
-    assert str(result.as_of_date) == "2026-04-30"
+    assert str(result.as_of) == "2026-04-30"
     commands_mock_client.get.assert_awaited_once_with(
         "engines/backtest/strategies/csm-set/report",
         date="2026-04-30",
@@ -282,7 +282,7 @@ async def test_strategy_report_tolerates_extra_keys(
     """Gateway may add keys not enumerated in StrategyReportResponse — they survive."""
     commands_mock_client.get.return_value = {
         "strategy_id": "csm-set",
-        "as_of_date": "2026-05-22",
+        "as_of": "2026-05-22",
         "report": {"headline": {}},
         "future_field_unknown_today": {"new": "shape"},
     }

@@ -55,7 +55,7 @@ async def main() -> int:
     print(f"  Capital weight: {strategy.capital_weight}")
     print()
 
-    print(f"─── Report as of {report.as_of_date} ──────────────")
+    print(f"─── Report as of {report.as_of} ──────────────")
     headline = report.report.get("headline", {})
     if not headline:
         print("  (no headline KPIs in report)")

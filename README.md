@@ -22,6 +22,9 @@ curl -sf http://localhost:8500/health
 
 ### Docker
 
+The default compose file runs the **standalone** proxy (no OpenBB data
+providers). To add providers, see [docs/connections.md](docs/connections.md).
+
 ```bash
 # 1. Bring up quant-network (one-time, from umbrella)
 cd ../quant-infra-db && docker compose up -d
@@ -79,6 +82,14 @@ quant-infra-db  →  quant-api-gateway  →  quant-openbb
 ```
 
 Without `quant-api-gateway` healthy, the proxy returns 502/504 errors.
+
+## OpenBB data provider connections
+
+To use OpenBB data providers (Yahoo Finance, Polygon, etc.) alongside the
+quant proxy, run in **full-platform mode** and configure provider credentials.
+
+See **[docs/connections.md](docs/connections.md)** for the complete guide,
+including credential setup, Docker configuration, and provider installation.
 
 ## Development
 

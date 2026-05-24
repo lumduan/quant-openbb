@@ -8,17 +8,25 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from openbb_quant.auth import verify_api_key
 from openbb_quant.main import app as application
 from openbb_quant.router import router
 
 
 @pytest.fixture
-def app() -> FastAPI:
-    """FastAPI app with the proxy router mounted (no CORS middleware)."""
+def app(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
+    """FastAPI app with the proxy router mounted (no CORS middleware).
+
+    Auth is disabled by default: ``QUANT_OPENBB_INTERNAL_API_KEY`` is forced
+    empty so router-level ``verify_api_key`` passes all requests. Tests that
+    need auth should use the ``authed_app`` / ``authed_http_client`` fixtures.
+    """
+    from openbb_quant.config import get_settings
+
+    monkeypatch.setenv("QUANT_OPENBB_INTERNAL_API_KEY", "")
+    get_settings.cache_clear()
     test_app = FastAPI()
     test_app.include_router(router)
     return test_app
@@ -68,10 +76,10 @@ def no_auth_app(monkeypatch: pytest.MonkeyPatch) -> Iterator[FastAPI]:
     """
     from openbb_quant.config import get_settings
 
-    monkeypatch.delenv("QUANT_OPENBB_INTERNAL_API_KEY", raising=False)
+    monkeypatch.setenv("QUANT_OPENBB_INTERNAL_API_KEY", "")
     get_settings.cache_clear()
     test_app = FastAPI()
-    test_app.include_router(router, dependencies=[Depends(verify_api_key)])
+    test_app.include_router(router)
     yield test_app
     get_settings.cache_clear()
 
@@ -87,7 +95,7 @@ def authed_app(monkeypatch: pytest.MonkeyPatch) -> Iterator[FastAPI]:
     monkeypatch.setenv("QUANT_OPENBB_INTERNAL_API_KEY", "test-api-key-123")
     get_settings.cache_clear()
     test_app = FastAPI()
-    test_app.include_router(router, dependencies=[Depends(verify_api_key)])
+    test_app.include_router(router)
     yield test_app
     get_settings.cache_clear()
 

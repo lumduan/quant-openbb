@@ -3,6 +3,10 @@
 Each endpoint delegates to ``_client.get`` with the gateway path and any
 query parameters received from the caller. Responses are returned verbatim
 as JSON.
+
+``verify_api_key`` is applied as a router-level dependency so auth works
+regardless of how the router is mounted (standalone main.py or full OpenBB
+Platform extension discovery).
 """
 
 from __future__ import annotations
@@ -10,8 +14,9 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from openbb_quant.auth import verify_api_key
 from openbb_quant.client import GatewayClient
 from openbb_quant.config import get_settings
 
@@ -21,7 +26,11 @@ _client = GatewayClient(
     api_key=_settings.internal_api_key.get_secret_value(),
 )
 
-router = APIRouter(prefix="/api/v2", tags=["quant"])
+router = APIRouter(
+    prefix="/api/v2",
+    tags=["quant"],
+    dependencies=[Depends(verify_api_key)],
+)
 
 
 # ─── Engine catalog ────────────────────────────────────────────────────────

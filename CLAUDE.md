@@ -117,6 +117,18 @@ failures return HTTP 401 with a JSON body.
   Current coverage is ≈98% — keep documentation-level modules
   (`models.py`, `extension.py`) covered by minimal smoke tests.
 
+## Knowledge base
+
+Long-lived domain knowledge lives in `.claude/knowledge/` for use by
+Claude Code across sessions:
+
+| File | Covers |
+|---|---|
+| `openbb-workspace.md` | OpenBB Workspace JSON specs, widget types, Dashboard connector patterns, gotchas |
+
+The full upstream reference is at `docs/openbb/workspace.md` (1046 lines,
+scraped from https://docs.openbb.co/workspace, 2026-05).
+
 ## Phase 2 status
 
 Bootstrapped 2026-05-22. See the executable plan at

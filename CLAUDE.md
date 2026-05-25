@@ -117,6 +117,35 @@ failures return HTTP 401 with a JSON body.
   Current coverage is ≈98% — keep documentation-level modules
   (`models.py`, `extension.py`) covered by minimal smoke tests.
 
+## Dashboard manifest sync rule
+
+**Every time a new endpoint, feature, or capability is added to the router,**
+the corresponding OpenBB Workspace manifests in `main.py` MUST be updated
+so the feature appears in the dashboard sidebar:
+
+| Manifest | Builder | What it controls |
+|---|---|---|
+| `/widgets.json` | `_WIDGET_DEFS` list | Widgets library sidebar — endpoint, type (`table`/`metric`/`chart`), params |
+| `/apps.json` | `_build_apps_manifest()` | Pre-built dashboard tabs and layouts — reference widget `id`s |
+| `/agents.json` | `_build_agents_manifest()` | AI agent definitions that can query the endpoints |
+| Prompt examples | inside app manifest `"prompts"` | Suggested queries shown in the AI agent picker |
+
+**Checklist when adding a new proxy route:** 
+- [ ] Widget entry in `_WIDGET_DEFS` (with correct `type`, `params`, `endpoint`)
+- [ ] If the widget should appear on a pre-built dashboard tab, add its `id` to the relevant `layout` in `_build_apps_manifest()`
+- [ ] If the widget uses a shared parameter (e.g. `strategy_id`), ensure the `groups` section references it
+- [ ] If the feature is AI-queryable, add prompt examples in the app manifest's `"prompts"` array
+
+After any manifest change, **rebuild and redeploy**:
+```bash
+docker compose -f <path>/quant-openbb/docker-compose.yml build --no-cache
+docker compose -f <path>/quant-openbb/docker-compose.yml up -d
+```
+
+Then refresh the OpenBB Workspace browser tab — new widgets appear in the
+sidebar, new apps appear in the Apps list, and new prompts appear under the
+AI agent.
+
 ## Knowledge base
 
 Long-lived domain knowledge lives in `.claude/knowledge/` for use by

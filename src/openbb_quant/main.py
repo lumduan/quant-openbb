@@ -148,6 +148,26 @@ _WIDGET_DEFS: list[dict[str, object]] = [
         ],
     },
     {
+        "id": "portfolio_metrics",
+        "name": "Portfolio Metrics",
+        "description": (
+            "Portfolio KPIs — Daily Return, Portfolio Drawdown, "
+            "Total Portfolio Value with day-over-day deltas."
+        ),
+        "endpoint": "/api/v2/engines/portfolio/metrics",
+        "category": "Quant",
+        "type": "metric",
+        "params": [
+            {
+                "type": "date",
+                "paramName": "snapshot_date",
+                "value": "$currentDate-1d",
+                "label": "Snapshot Date",
+                "description": "Date to retrieve metrics for (omit for latest).",
+            },
+        ],
+    },
+    {
         "id": "portfolio_equity_curve",
         "name": "Portfolio Equity Curve",
         "description": "Combined equity curve across all strategies, optionally normalized to 1.0.",

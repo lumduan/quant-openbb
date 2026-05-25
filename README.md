@@ -48,7 +48,7 @@ curl -sf http://localhost:8500/health
 
 ## Proxied endpoints
 
-All 16 endpoints are GET requests under `/api/v2`. The proxy delegates
+All 18 endpoints are GET requests under `/api/v2`. The proxy delegates
 to the gateway and returns its JSON verbatim.
 
 | # | Path | Path params | Query params |
@@ -56,19 +56,24 @@ to the gateway and returns its JSON verbatim.
 | 1 | `/engines/catalog` | — | — |
 | 2 | `/engines/portfolio/snapshot` | — | — |
 | 3 | `/engines/portfolio/snapshot/{snapshot_date}` | `snapshot_date` (date) | — |
-| 4 | `/engines/portfolio/equity-curve` | — | `normalize` (bool, default `true`) |
-| 5 | `/engines/portfolio/overall-performance` | — | — |
-| 6 | `/engines/portfolio/strategies` | — | — |
-| 7 | `/engines/portfolio/strategies/{strategy_id}` | `strategy_id` (str) | — |
-| 8 | `/engines/portfolio/strategies/{strategy_id}/performance` | `strategy_id` | `from_date`, `to_date` |
-| 9 | `/engines/portfolio/strategies/{strategy_id}/equity-curve` | `strategy_id` | — |
-| 10 | `/engines/backtest/strategies/{strategy_id}/report` | `strategy_id` | `date` |
-| 11 | `/engines/backtest/strategies/{strategy_id}/trades` | `strategy_id` | `from_date`, `to_date`, `limit`, `offset` |
-| 12 | `/engines/backtest/strategies/{strategy_id}/benchmark-curve` | `strategy_id` | `from_date`, `to_date`, `normalize` |
-| 13 | `/engines/market-data/health` | — | — |
-| 14 | `/engines/market-data/providers` | — | — |
-| 15 | `/engines/signals/health` | — | — |
-| 16 | `/engines/signals/status` | — | — |
+| 4 | `/engines/portfolio/metrics` | — | — |
+| 5 | `/engines/portfolio/metrics/{snapshot_date}` | `snapshot_date` (date) | — |
+| 6 | `/engines/portfolio/equity-curve` | — | `normalize` (bool, default `true`) |
+| 7 | `/engines/portfolio/overall-performance` | — | — |
+| 8 | `/engines/portfolio/strategies` | — | — |
+| 9 | `/engines/portfolio/strategies/{strategy_id}` | `strategy_id` (str) | — |
+| 10 | `/engines/portfolio/strategies/{strategy_id}/performance` | `strategy_id` | `from_date`, `to_date` |
+| 11 | `/engines/portfolio/strategies/{strategy_id}/equity-curve` | `strategy_id` | — |
+| 12 | `/engines/backtest/strategies/{strategy_id}/report` | `strategy_id` | `date` |
+| 13 | `/engines/backtest/strategies/{strategy_id}/trades` | `strategy_id` | `from_date`, `to_date`, `limit`, `offset` |
+| 14 | `/engines/backtest/strategies/{strategy_id}/benchmark-curve` | `strategy_id` | `from_date`, `to_date`, `normalize` |
+| 15 | `/engines/market-data/health` | — | — |
+| 16 | `/engines/market-data/providers` | — | — |
+| 17 | `/engines/signals/health` | — | — |
+| 18 | `/engines/signals/status` | — | — |
+
+Rows 4 and 5 ship pre-formatted KPI cards for the OpenBB Metric widget —
+see [OpenBB Metric Widget Example](#openbb-metric-widget-example) below.
 
 Local health check: `curl http://localhost:8500/health` → `{"status":"ok"}`.
 
@@ -100,6 +105,55 @@ For the OpenBB Workspace "Connect backend" form, configure Key = `X-API-Key`,
 Value = your key, Location = `Header`.
 
 See [`src/openbb_quant/auth.py`](src/openbb_quant/auth.py) for the implementation.
+
+## OpenBB Metric Widget Example
+
+The `/engines/portfolio/metrics` proxy returns an array of `{label, value,
+delta}` objects matching the
+[OpenBB Metric widget contract](https://docs.openbb.co/workspace/developers/widget-types/metric).
+The widget renders the arrow (`↑` / `↓`) and color from the sign of `delta`
+— the data carries only pre-formatted strings.
+
+### Example response
+
+```json
+[
+  {"label": "Daily Return",          "value": "0.63%",       "delta": "-0.12"},
+  {"label": "Portfolio Drawdown",    "value": "-4.22%",      "delta": "-0.12"},
+  {"label": "Total Portfolio Value", "value": "$998,142.71", "delta": "6234.10"}
+]
+```
+
+`delta` is the day-over-day change vs the most recent earlier snapshot
+(percentage points for percentages, raw dollars for currency, no unit on the
+output string). Empty string when no comparable previous snapshot exists. See
+the gateway reference: [`quant-api-gateway/docs/reference/portfolio.md`](../quant-api-gateway/docs/reference/portfolio.md).
+
+### `widgets.json` config
+
+Drop this into your OpenBB Workspace `widgets.json` to render the three KPIs:
+
+```json
+{
+  "name": "Portfolio Metrics",
+  "description": "Key portfolio KPIs with day-over-day deltas",
+  "category": "Portfolio",
+  "type": "metric",
+  "endpoint": "engines/portfolio/metrics",
+  "gridData": { "w": 15, "h": 8 },
+  "params": [
+    {
+      "paramName": "snapshot_date",
+      "type": "date",
+      "value": "$currentDate-1d",
+      "label": "Select Date"
+    }
+  ]
+}
+```
+
+When `snapshot_date` is omitted the proxy hits `/engines/portfolio/metrics`
+(latest); when supplied, it hits `/engines/portfolio/metrics/{snapshot_date}`.
 
 ## OpenBB data provider connections
 

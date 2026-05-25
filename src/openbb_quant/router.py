@@ -1,4 +1,4 @@
-"""FastAPI router proxying the 16 live ``/api/v2/engines/*`` gateway endpoints.
+"""FastAPI router proxying the 18 live ``/api/v2/engines/*`` gateway endpoints.
 
 Each endpoint delegates to ``_client.get`` with the gateway path and any
 query parameters received from the caller. Responses are returned verbatim
@@ -52,6 +52,27 @@ async def get_portfolio_snapshot() -> Any:
 @router.get("/engines/portfolio/snapshot/{snapshot_date}")
 async def get_portfolio_snapshot_by_date(snapshot_date: date) -> Any:
     return await _client.get(f"engines/portfolio/snapshot/{snapshot_date.isoformat()}")
+
+
+@router.get("/engines/portfolio/metrics")
+async def get_portfolio_metrics(
+    snapshot_date: date | None = Query(None, description="Optional snapshot date; omit for latest"),
+) -> Any:
+    """Portfolio KPIs shaped for the OpenBB Metric widget.
+
+    Forwards ``snapshot_date`` as a query string so OpenBB widget ``params``
+    work without URL templating. The gateway treats omitted dates as "latest".
+    """
+    return await _client.get(
+        "engines/portfolio/metrics",
+        snapshot_date=snapshot_date.isoformat() if snapshot_date else None,
+    )
+
+
+@router.get("/engines/portfolio/metrics/{snapshot_date}")
+async def get_portfolio_metrics_by_date(snapshot_date: date) -> Any:
+    """Portfolio KPIs for a specific date, shaped for the OpenBB Metric widget."""
+    return await _client.get(f"engines/portfolio/metrics/{snapshot_date.isoformat()}")
 
 
 @router.get("/engines/portfolio/equity-curve")

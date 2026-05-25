@@ -259,18 +259,68 @@ Two design clarifications resolved up front:
 >     • Find Phase 3 section → add note about completion
 >     • Commit to umbrella main
 
-### Deviations from this prompt (decided up front, with user approval)
+### Deviations from this prompt (decided during execution)
 
-| Prompt said | Plan does | Reason |
+| Prompt said | Implementation does | Reason |
 |---|---|---|
-| `tests/api/v2/engines/test_portfolio.py` | Extend `tests/api/v2/test_engines.py` | The codebase has all v2 engine tests in one file; matching conventions. |
-| Gateway coverage gate 80% | Keep at 90% | Existing `pyproject.toml` enforces 90%; no reason to lower. |
-| OpenBB proxy with `response_model=PortfolioMetricsResponse` | OpenBB proxy returns `Any`, no `response_model` | All 16 existing proxy endpoints return raw gateway JSON; matches conventions and avoids duplicating the schema. |
-| MetricItem `value` plain + `delta` arrowed | Both populated; `value` arrow-formatted (percentages), plain currency; `delta` = day-over-day change vs previous snapshot, arrow-formatted | The user prompt's field descriptions and example response disagreed; user selected the day-over-day variant. Requires `query_previous_snapshot` helper. |
-| Single endpoint `/metrics` with optional `snapshot_date` query param | Two endpoints: `/metrics` (latest) + `/metrics/{snapshot_date}` (path param) | Mirrors the existing snapshot pair (path params, not query params); consistent with v2 engine surface. |
+| `tests/api/v2/engines/test_portfolio.py` | Extends `tests/api/v2/test_engines.py` | The codebase keeps all v2 engine tests in one file. |
+| Gateway coverage gate 80% | Kept at 90% | Existing `pyproject.toml` enforces 90%. |
+| OpenBB proxy with `response_model=PortfolioMetricsResponse` | OpenBB proxy returns `Any`, no `response_model` | All other proxy endpoints return raw gateway JSON. |
+| MetricItem `value` arrow-prefixed + `delta` arrow-prefixed | Plain `value` (unit only, no arrows) + plain signed-number `delta` (no arrows, no unit) | Final design follows the [OpenBB Metric widget spec](https://docs.openbb.co/workspace/developers/widget-types/metric): the widget renders arrows and colors from the sign of `delta`; the data carries only formatted strings. |
+| Single endpoint `/metrics` with optional `snapshot_date` query param | Both: `GET /metrics?snapshot_date=...` (query) and `GET /metrics/{snapshot_date}` (path) | Path-param mirrors the existing snapshot pair (RESTful); query-param exists so OpenBB widget `params` work without URL templating. The `/metrics` route delegates to the path-param handler when the query is supplied. |
+| Response wrapped in `PortfolioMetricsResponse` object | Response is a bare `list[MetricItem]` (`response_model=list[MetricItem]`). `PortfolioMetricsResponse` is kept as a **cache-internal wrapper** only. | The Metric widget reads a top-level array — a wrapper object would be interpreted as a single metric. |
+| Delta nullable (`str \| None`) | `delta: str` with default `""` when no comparable data exists | OpenBB Metric widget docs mark `delta` as a required string. |
+| `_format_currency_delta` helper inside `services/portfolio.py` | Helper removed; `format_delta_number(value)` in `src/utils/formatting.py` covers both percent and currency deltas. | The arrow lives in the rendering widget — the formatter just emits a signed number. |
 
 ---
 
 ## Completion Notes
 
-*(Populated at the end of Phase E.)*
+**Completed:** 2026-05-25, branch `feat/portfolio-metrics` in both sub-repos.
+
+### Test results
+
+| Sub-repo | Tests | Coverage | Gate |
+|---|---|---|---|
+| `quant-api-gateway` | 327 passed, 8 deselected | 90.43 % | ≥ 90 % ✓ |
+| `quant-openbb`      | 62 passed                | 92.57 % | ≥ 80 % ✓ |
+
+`uv run ruff check`, `uv run ruff format --check`, `uv run mypy src tests`, and
+`uv run pytest` all exit 0 in both sub-repos.
+
+### Endpoint surface added
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/v2/engines/portfolio/metrics` | Latest; accepts optional `?snapshot_date=YYYY-MM-DD` for widget params |
+| GET | `/api/v2/engines/portfolio/metrics/{snapshot_date}` | Path-param variant for RESTful clients |
+| GET (proxy) | `/api/v2/engines/portfolio/metrics` | OpenBB proxy, forwards `snapshot_date` query string |
+| GET (proxy) | `/api/v2/engines/portfolio/metrics/{snapshot_date}` | OpenBB proxy, path-param variant |
+
+### Files changed (gateway)
+
+- Added `src/utils/__init__.py`, `src/utils/formatting.py` (100 % covered)
+- Extended `src/schemas/gateway.py` (`MetricItem`, `PortfolioMetricsResponse`)
+- Extended `src/services/portfolio.py` (`query_previous_snapshot`, `build_metrics_response`, `_PREVIOUS_SNAPSHOT_SQL`)
+- Extended `src/api/v2/engines/portfolio.py` (two new endpoint handlers)
+- Extended `tests/api/v2/test_engines.py` (formatting unit tests + endpoint integration tests)
+- Created `docs/reference/portfolio.md` (endpoint reference)
+
+### Files changed (openbb)
+
+- Extended `src/openbb_quant/router.py` (two new proxy routes; docstring count updated)
+- Extended `tests/test_router.py` (three new tests)
+- Updated `tests/test_extension.py` (route count `16 → 18`)
+- Updated `README.md` (proxied endpoints table renumbered; new "OpenBB Metric Widget Example" section)
+- Created `docs/plans/feature-portfolio-metrics.md` (this file)
+
+### Known follow-ups (out of scope for this PR)
+
+- Currency support beyond USD (`format_currency` is hard-coded to `$`).
+- Widget config in this README example uses the default OpenBB Workspace
+  Metric widget; no styling extras configured.
+- The drawdown delta uses the same `format_delta_number` as daily-return,
+  meaning the percentage-point delta can read counter-intuitively when a
+  drawdown improves (delta is positive when the drawdown becomes less
+  negative). Acceptable for v1; future iteration could invert the sign
+  to read "drawdown shrank by X" rather than "drawdown changed by +X".

@@ -11,4 +11,4 @@ def test_extension_exposes_router() -> None:
 
 
 def test_extension_router_has_all_endpoints() -> None:
-    assert len(QuantExtension.router.routes) == 16
+    assert len(QuantExtension.router.routes) == 18

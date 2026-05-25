@@ -55,6 +55,49 @@ async def test_get_portfolio_snapshot_by_date(
 
 
 @pytest.mark.asyncio
+async def test_get_portfolio_metrics(http_client: AsyncClient, mock_client: AsyncMock) -> None:
+    """Gateway returns the OpenBB Metric widget array verbatim (no date param)."""
+    payload = [
+        {"label": "Daily Return", "value": "0.63%", "delta": "-0.12"},
+        {"label": "Portfolio Drawdown", "value": "-4.22%", "delta": "-0.12"},
+        {"label": "Total Portfolio Value", "value": "$998,142.71", "delta": "6234.10"},
+    ]
+    mock_client.get.return_value = payload
+    body = await _call(http_client, "/engines/portfolio/metrics")
+    assert body == payload
+    mock_client.get.assert_awaited_once_with("engines/portfolio/metrics", snapshot_date=None)
+
+
+@pytest.mark.asyncio
+async def test_get_portfolio_metrics_with_snapshot_date_query(
+    http_client: AsyncClient, mock_client: AsyncMock
+) -> None:
+    """``snapshot_date`` query param is forwarded as ISO string to the gateway."""
+    payload = [{"label": "Daily Return", "value": "0.50%", "delta": ""}]
+    mock_client.get.return_value = payload
+    body = await _call(http_client, "/engines/portfolio/metrics", snapshot_date="2026-05-22")
+    assert body == payload
+    mock_client.get.assert_awaited_once_with(
+        "engines/portfolio/metrics", snapshot_date="2026-05-22"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_portfolio_metrics_by_date(
+    http_client: AsyncClient, mock_client: AsyncMock
+) -> None:
+    payload = [
+        {"label": "Daily Return", "value": "0.63%", "delta": ""},
+        {"label": "Portfolio Drawdown", "value": "N/A", "delta": ""},
+        {"label": "Total Portfolio Value", "value": "$998,142.71", "delta": ""},
+    ]
+    mock_client.get.return_value = payload
+    body = await _call(http_client, "/engines/portfolio/metrics/2026-05-22")
+    assert body == payload
+    mock_client.get.assert_awaited_once_with("engines/portfolio/metrics/2026-05-22")
+
+
+@pytest.mark.asyncio
 async def test_get_portfolio_equity_curve_default_normalize(
     http_client: AsyncClient, mock_client: AsyncMock
 ) -> None:
